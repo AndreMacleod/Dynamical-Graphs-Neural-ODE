@@ -7,6 +7,7 @@ using GraphDataFrameBridge
 using DataFrames
 using Random
 
+cd("C:/Users/andre_viking96/Desktop/JuliaSciML")
 
 # Loading dataframe
 df = CSV.read("Video_games_5_clean.csv", DataFrame)
@@ -34,9 +35,15 @@ egraph = egonet(mg, rand(vertices(mg)), 2)
 # save this graph object for loading and drawing later on
 savegraph("egraph", egraph.graph)
 
+# saving this to upload to github and replicate with this (file size limits)
+savegraph("egraph.mg", egraph)
 
 
+
+## GIULIO REPLICATE FROM HERE
 ## Creating a 'time-series' of graphs to represent a dynamic graph over the same set of nodes
+
+mg = loadgraph("egraph.mg", MGFormat())
 
 # Function to filter edges by year attribute
 function edge_filter_fn(g::AbstractMetaGraph, e, year)
@@ -46,12 +53,12 @@ end
 # Now for each year we have a set of edges for that year, and we create a list with all of these objects
 year_edges = Vector{LightGraphs.SimpleGraphs.SimpleEdge{Int64}}[]
 for year in 1999:2018
-    push!(year_edges, collect(filter_edges(egraph, (g, e) -> edge_filter_fn(g,e, year))))
+    push!(year_edges, collect(filter_edges(mg, (g, e) -> edge_filter_fn(g,e, year))))
 end
 
 
 # make a copy of egraph that we can remove all edges from
-empty_graph = copy(egraph)
+empty_graph = copy(mg)
 # remove all edges from this graph
 for edge in collect(edges(empty_graph))
     rem_edge!(empty_graph, edge)
@@ -73,9 +80,7 @@ end
 time_graphs
 
 
-    
 ## Doing the embedding
-    
 using LinearAlgebra
 using Arpack
 
@@ -87,7 +92,6 @@ function do_the_rdpg(A,d)
     return (L̂ = L̂, R̂ = R̂)
 end
 
-# Create time series of embeddings
 time_embeddings = Matrix{Float64}[]
 
 for graph in time_graphs
