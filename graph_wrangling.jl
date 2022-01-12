@@ -10,7 +10,7 @@ using Random
 cd("C:/Users/andre_viking96/Desktop/JuliaSciML")
 
 # Loading dataframe
-df = CSV.read("Video_games_5_clean.csv", DataFrame)
+df = CSV.read("Video_Games_5_clean.csv", DataFrame)
 
 # Improving colname
 rename!(df, :asin => :productID)
