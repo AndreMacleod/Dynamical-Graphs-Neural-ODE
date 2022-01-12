@@ -7,7 +7,6 @@ using GraphDataFrameBridge
 using DataFrames
 using Random
 
-cd("C:/Users/andre_viking96/Desktop/JuliaSciML")
 
 # Loading dataframe
 df = CSV.read("Video_games_5_clean.csv", DataFrame)
@@ -34,6 +33,8 @@ egraph = egonet(mg, rand(vertices(mg)), 2)
 
 # save this graph object for loading and drawing later on
 savegraph("egraph", egraph.graph)
+
+
 
 ## Creating a 'time-series' of graphs to represent a dynamic graph over the same set of nodes
 
@@ -72,7 +73,9 @@ end
 time_graphs
 
 
+    
 ## Doing the embedding
+    
 using LinearAlgebra
 using Arpack
 
@@ -84,6 +87,7 @@ function do_the_rdpg(A,d)
     return (L̂ = L̂, R̂ = R̂)
 end
 
+# Create time series of embeddings
 time_embeddings = Matrix{Float64}[]
 
 for graph in time_graphs
@@ -95,7 +99,7 @@ end
 time_embeddings[11]
 length(time_embeddings)
 
-# Testing with one of the graphs
+# Testing with two of the graphs
 A1 = adjacency_matrix(time_graphs[11])
 
 # check it is a symmetric matrix
