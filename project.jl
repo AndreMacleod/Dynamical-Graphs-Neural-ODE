@@ -22,7 +22,7 @@ df = CSV.read("aves-wildbird-network.csv", DataFrame)
 # Improve df column names
 rename!(df,[:Bird1,:Bird2,:Weight, :Day])
 
-mini_df = filter([:Bird1, :Bird2] => (x, y) -> x < 9 && y < 9, df)
+mini_df = filter([:Bird1, :Bird2] => (x, y) -> x < 11 && y < 11, df)
 
 mini_df
 describe(mini_df)
@@ -75,6 +75,7 @@ for i in 1:6
     push!(time_graphs, day_graph)
 end
 
+
 time_graphs
 
 props(empty_graph, 25)
@@ -99,7 +100,7 @@ time_graphs[5]
 using LinearAlgebra
 using Arpack
 
-n = 8
+n = 10
 d = 2
 
 # function that does svd decomposition
@@ -141,7 +142,9 @@ using Optim
 train = time_embeddings[1:5]
 
 # Define initial parameters
-u0 = train[1]
+
+# We transpose matrices as julia deals with reshaping column-wise
+u0 = train[1]'
 datasize = length(train)
 tspan = (1, 5)
 tsteps = range(tspan[1], tspan[2], length = datasize)
@@ -177,45 +180,37 @@ L1 = [2.0 2; 3 2; 1 1.4; 2 2; 2 1.9]
 
 # Function that takes take vertex embedding, one vertex and returns all distances between that vertex and the 3 closest vertices
 function vertex_distances(M, v)
-    distances = []
+    distances = []  # preallocate sizes
     vertex_norm_distances = []
     for i::Int8 in 1:n                                                 # find closest_vertices to v 
         if i != v
-            distance = norm(M[v,:] - M[i,:], 1)
-            push!(vertex_norm_distances, (distance, i))           
+            distance = norm(M[:,v] - M[:,i], 1)
+            push!(vertex_norm_distances, (distance, i))
+      
         end 
     end
-    sort!(vertex_norm_distances) 
-    closest_vertices_to_v = [vertex_norm_distances[1][2]]
+
+    closest_vertices_to_v = partialsort(vertex_norm_distances,1:4, by=x->x[1])
+
     for i in 1:length(closest_vertices_to_v)
-        vertex_index = closest_vertices_to_v[i]           
-        for j in 1:size(M)[2]                             # iterating over all columns in matrix
-            push!(distances, M[v, j] - M[vertex_index, j])
+        vertex_index = closest_vertices_to_v[i][2]           
+        for j in 1:size(M)[1]                             # iterating over all columns in matrix
+            push!(distances, M[j, v] - M[j, vertex_index])
         end
     end
     return distances
 end
 
+L1 = [2.0 2 3 1.2 1 4 2 2 1 2.0; 2 1.9 4 4 4 4 6 6 2.0 2.05]
+vertex_distances(L1, 1)
+
+
+
 L1 = [2.0 2; 3 2; 1 1.4; 2 2; 2 1.9; 4 4; 4 4]
-vertex_distances(u0, 2)
+vertex_distances(u0, 1)
 
 
 u0
-# time series of matrices
-
-L2 = [2.0 3; 4 1; 1 2;   2 2; 2 1.9]
-L3 = [3.0 2; 4 3; 1 3.4; 2 2; 2 1.8]
-L4 = [4.0 2; 4 3; 2 3;   2 2; 2 1.7]
-L5 = [5.0 3; 3 1; 2 2;   2 2; 2 1.5]
-
-test = [3.0 3; 4 2; 2 3; 2 2; 2 1]
-
-norm(L1[1,:] - L1[2,:], 1)
-
-L1[1,:]
-
-
-
 
 L1
 #u0 = train[1]
@@ -231,7 +226,7 @@ L1
 
 
 # create model architecture
-ann = Chain(Dense((1)*d,4,tanh), Dense(4,d))
+ann = Chain(Dense((4)*d,7,tanh), Dense(7,d))
 pinit,re = Flux.destructure(ann)
 
 # check how many params in the nn - 388483
@@ -256,38 +251,40 @@ pinit
 # n=3 
 # d=2
 
-# create initial function
 function dudt1_(du,u,p,t)
     for i in 1:n
+        nn = re(p)(vertex_distances(u, i))
         for j in 1:d
-            du[(i-1)*d + j]= re(p)(vertex_distances(u, i))[j]  #put this outside of j loop
+            du[(i-1)*d + j] = nn[j]  
         end
-    #@info "foo-bar" progress=i/n  # this will show us that we are iterating through the matrix
+    #info "foo-bar" progress=i/n  # this will show us that we are iterating through the matrix
     end
 end
-
 # Define problem
 
 prob = ODEProblem(dudt1_, u0, tspan, pinit)
 
 # Solving problem
 # Reshaping train so it can be fitted aginst loss function
-loss_train = Array{Float64}(undef,n,d,datasize)
-train[1]
+
+loss_train = Array{Float64}(undef,d,n,datasize)
+train[2]
 for i in 1:datasize
-     loss_train[:,:,i] = train[i]
+     loss_train[:,:,i] = train[i]'
 end
 loss_train
 
-# flatening loss_train to conform with shape during nn training
-loss_train = reshape(loss_train, (n*d,datasize))
 
+# flatening loss_train to conform with shape during nn training
+loss_train = transpose(reshape(loss_train, (n*d,datasize)))'
+loss_train
 #plot(loss_train', linestyle = :dot, linealpha = 0.8, linewidth = 1.5)
 # Create loss function
 function loss(p)
     tmp_prob = remake(prob, p = p)
     tmp_sol = solve(tmp_prob, Tsit5(), saveat = tsteps)
     sol_array = reshape(Array(tmp_sol), (n*d,datasize))
+    #println(sol_array)
     sum(abs2, sol_array - loss_train)
 
 end
@@ -308,101 +305,75 @@ end
 
 
 #Use ADAM for finding initial local minima
-res = DiffEqFlux.sciml_train(loss, pinit, ADAM(0.02), cb = neuralode_callback, maxiters = 10)
+res = DiffEqFlux.sciml_train(loss, pinit, ADAM(0.03), cb = neuralode_callback, maxiters = 75)
 
 # res.minimzers gives best parameters from first search, now use these to continue with BFGS which finishes local minima better
 # bgfs runs until finds a fit - finalizes optimization - bfgs good for stiff conditions
 # bfgs looks for convergences criteria
-res2 = DiffEqFlux.sciml_train(loss, res.minimizer, BFGS(initial_stepnorm=0.01), cb = neuralode_callback, maxiters = 10)
+res2 = DiffEqFlux.sciml_train(loss, res.minimizer, BFGS(initial_stepnorm=0.01), cb = neuralode_callback, maxiters = 75)
 
 res2.minimum
 
 pred_prob = ODEProblem(dudt1_, u0, tspan, res2.minimizer)
 pred_data = solve(pred_prob, Tsit5(), saveat = tsteps)
 
-reshape(Array(pred_data),  (n*d,datasize))
-loss_train
 
-
+## Symbolic Regression
 using ModelingToolkit
 using DataDrivenDiffEq
 using OrdinaryDiffEq
 using Sundials
+using SymbolicRegression
+using Flux
 
-X = (reshape(Array(pred_data),  (n*d,datasize)))
-DX = (reshape(Array(pred_data(pred_data.t, Val{1})), (n*d,datasize)))
+#test example
+X = rand(8,2)
+f(x) = [sin(π*x[2]+x[1]); exp(x[2])]
+Y = hcat(map(f, eachcol(X))...)
+net = OccamNet(8, 2, 3, Function[sin, +, *, exp], skip = true)
+Flux.train!(net, X, Y, ADAM(1e-2), 100, routes = 100, nbest = 3)
 
-DX
-X
+# real example
+par = res2.minimizer
 
-# create basis
-@variables t, u[1:16](t)
-# Generate the basis functions, multivariate polynomials up to deg 5
-# and sine
-b = [polynomial_basis(u, 3); sin.(u)]
-basis = Basis(b, u, iv = t)
-# Create the thresholds which should be used in the search process
-λ = Float32.(exp10.(-8:0.1:0))
-# Create an optimizer for the SINDy problem
-opt = STLSQ(λ)
+# random inputs X
+X = rand(8,10)
+# Y as output of nn
+Y = re(par)(X)
 
-# Define problem with data and differentiated data 
-ddprob = ContinuousDataDrivenProblem(X, DX)
+## first mnethod using solve() didnt work - EquationSearch is not defined error
+# Define the options
+#opts = DataDrivenDiffEq.EQSearch([+, *, sin, exp], maxdepth = 1, progress = false, verbosity = 0)
 
-# find solution within basis
-ddsol = solve(ddprob, basis, opt, normalize = true, maxiter = 10000)
+# Define the problem
+#prob = DataDrivenDiffEq.DirectDataDrivenProblem(X, Y)
 
-system= result(ddsol)
-print(system)
-
-params = parameters(ddsol);
-
-print(ddsol, Val{false})
-
-equations(system)
-print(system)
-@named sys = ODESystem(equations(system), independent_variable(system), states(system), parameters(system))
-
-dudt = ODEFunction(sys)
-
-pred_tspan = (1,6)
-pred_tsteps = range(pred_tspan[1], pred_tspan[2], length = datasize+1)
+# Solve the problem
+#res = DataDrivenDiffEq.solve(prob, opts, numprocs = 0, multithreading = false)
+#sys = result(res)
 
 
-prob = ODEProblem(dudt, u0, pred_tspan, params)
-pred_sol = solve(prob,  Vern7(), saveat = pred_tsteps, maxiters = 100000)
+# Search with occam net
+net = OccamNet(8, 2, 2, Function[sin, +, *, exp], skip = true)
 
-Array(pred_sol)
+Flux.train!(net, X, Y, ADAM(1e-2), 900, routes = 100, nbest = 3)
 
-pred_embed1 = pred_sol[:, :, 6]
+@variables x[1:8]
 
-using JLD
-save("pred_embed1.jld", "array", pred_embed)
+for i in 1:10
+  route = rand(net)
+  prob = probability(net, route)
+  eq = simplify.(net(x, route))
+  print(eq , " with probability ",  prob, "\n")
+end
+
+set_temp!(net, 0.01)
+route = rand(net)
+prob = probability(net, route)
+eq = simplify.(net(x, route))
+print(eq , " with probability ",  prob, "\n")
 
 
-pred = load("pred_embed.jld")["array"]
+#################
 
-convert(DataFrame, pred')
-pred_df = DataFrame(pred, :auto)
 
-(eachrow(pred_df))
-
-# Adding vertex number to column so we know wchich vertex it is
-pred_df[!, :vertex] = 1:n
-
-# reordering columns 
-pred_df = pred_df[:, [:vertex, :x1, :x2]]
-
-edge_prob_df = crossjoin(pred_df, pred_df, makeunique = true)
-
-edge_prob_df = edge_prob_df[edge_prob_df[:, :vertex] .!= edge_prob_df[:, :vertex_1], :]
-
-edge_prob_df[!, :edge_prob] = edge_prob_df[!, :x1] .* edge_prob_df[!, :x1_1] .+ edge_prob_df[!, :x2] .* edge_prob_df[!, :x2_1]
-
-edge_prob_df
-
-a = edge_prob_df[edge_prob_df[:,:edge_prob] .> 0.5, :]
-
-print(a)
-
-collect(edges(time_graphs[6]))
