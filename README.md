@@ -1,6 +1,5 @@
 # Andre Macleod-Hungar DATA601project
 
 
-project.jl is all the code for the project so far, with csv to graph embedding time series, and using these to train neural ODE. It loads in the aves file as the dataset.
+project.jl is the main file, with helperFunctions.jl containing helper function to make the main scrupt a bit cleaner. Current experiments fail with larger node sizes due to my computer not handling memory allocation very well and lack of resources in general, so next step would be to try with JuliaHub.
 
-Training of NN so far is extremely slow to run on my CPU - running loss(pinit) currently a percentage bar for rough time estimate - after 20mins, still 0.0%. I was way off in my initial time estimates. About half a mill NN params, with 202 vertices and 3 dimensions.
