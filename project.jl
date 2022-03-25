@@ -86,17 +86,6 @@ function dudt1_(du,u,p,t)
     end
 end
 
-# alternative ODE function
-function dudt2_(du,u,p,t)
-    for i in 1:n
-        dX_i = [0,0]
-        for j in 1:k
-            dX_i .+= re(p)(vertex_distances_2(u, i, k))
-        end
-        end
-    
-end
-
 
 # Defining problem
 prob = ODEProblem(dudt1_, u0, tspan, pinit)
