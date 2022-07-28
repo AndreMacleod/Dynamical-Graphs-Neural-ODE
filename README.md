@@ -19,5 +19,5 @@ Step from Neural ODE to Universal Differential Equations to capture any preexist
 Exploring data augmentation techniques to interpolate between the estimated embeddings, other embeddings, Inputting additional node and edge metadata, exploring different neural network architectures.
 
 
-# NB
+## NB
 Code was written 6-7 mths ago, so likely is out of date, but this problem is being continued and worked on by fellow student at UC Connor Smith, no version of his code is online yet however.
