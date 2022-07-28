@@ -1,8 +1,12 @@
 # Andre Macleod-Hungar
 # Dynamical Graphs Neural ODE
 
+Data has 4 columns:
 
-project.jl is the main script file, with helperFunctions.jl containing helper functions to make the main script a bit cleaner. 
+origin bid, destination bird, obesrvation weight, day
+
+
+project.jl is the main script file, with helperFunctions.jl containing helper functions to make the main script a bit cleaner. Run helperFunctions.jl first
 
 Potential TODO 
 
